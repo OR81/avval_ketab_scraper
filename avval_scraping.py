@@ -1,211 +1,304 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import mysql.connector
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException
+from selenium.webdriver.common.keys import Keys
+import time
 import logging
 import json
-import time
 import re
+import mysql.connector
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# ----------------- Database -----------------
-def connect_to_database():
+# ----------------- Database setup -----------------
+conn = mysql.connector.connect(
+    host='localhost',
+    user='root',
+    password='',
+    port=3307,
+    database='scraping_data'
+)
+cursor = conn.cursor()
+
+def save_to_database(data):
     try:
-        data = mysql.connector.connect(
-            host='localhost',
-            user='root',
-            port=3307,
-            password='',
-            database='scraping_data'
-        )
-        cursor = data.cursor()
-        logging.info("✅ Connected to database successfully.")
-        return data, cursor
-    except mysql.connector.Error as err:
-        logging.error(f"❌ Database connection error: {err}")
-        return None, None
+        phone_number = data[2]
+        if phone_number in existing_phones:
+            logging.info(f"⚠️ Duplicate phone skipped: {phone_number}")
+            return
+
+        sql = """
+            INSERT INTO avval_data
+            (name, specialty, phone_number, address, email, category, subcategory, subsidiary, gis)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
+        
+        cursor.execute(sql, data)
+        conn.commit()
+        logging.info(f"💾 Saved: {data[0]}")
+    except Exception as e:
+        logging.error(f"❌ DB error: {e}")
+        conn.rollback()
+
+# ----------------- Browser setup -----------------
+chrome_options = Options()
+chrome_options.add_argument("--headless=new")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--window-size=1280,1024")
+
+service = Service("chromedriver.exe")
+driver = webdriver.Chrome(service=service, options=chrome_options)
+wait = WebDriverWait(driver, 10)
+
+start_url = "https://avval.ir/"
+driver.get(start_url)
+time.sleep(2)
+
+# ----------------- Helper Functions -----------------
+def scroll_click(element):
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
+        time.sleep(0.4)
+        element.click()
+        time.sleep(0.7)
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click();", element)
+        time.sleep(0.7)
+
+def get_text_safe(el):
+    try:
+        return el.text.strip()
+    except:
+        return ""
 
 def load_existing_phones(cursor):
     """Load all existing phone numbers from database into a set"""
     existing = set()
-    cursor.execute("SELECT phone_number FROM data WHERE phone_number IS NOT NULL AND phone_number != ''")
+    cursor.execute("SELECT phone_number FROM avval_data WHERE phone_number IS NOT NULL AND phone_number != ''")
     for (phone,) in cursor.fetchall():
         existing.add(phone.strip())
     logging.info(f"📱 Loaded {len(existing)} existing phone numbers from database.")
     return existing
 
-def save_to_database(data, existing_phones, cursor, conn):
-    """
-    data = [name, specialty, phone_number, address, email, category, gis_json]
-    """
-    phone_number = data[2]
-    if phone_number in existing_phones:
-        logging.info(f"⚠️ Duplicate phone skipped: {phone_number}")
-        return
+def clean_sub_name(full_text):
+    text = full_text.strip()
+    text = text.replace("بهترین", "").strip()
+    if "در" in text:
+        text = text.split("در")[0].strip()
+    return text
 
+
+
+def wait_for_dropdown(driver, timeout=10):
     try:
-        sql = """
-            INSERT INTO data
-            (name, specialty, phone_number, address, email, category, gis)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql, data)
-        conn.commit()
-        existing_phones.add(phone_number)
-        logging.info(f"💾 Saved to database: {data}")
-    except mysql.connector.Error as err:
-        logging.error(f"❌ Database error: {err}")
-        conn.rollback()
+        return WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located(
+                (By.XPATH, "//div[contains(@class,'selectize-input')]")
+            )
+        )
+    except:
+        return None
 
-# ----------------- GIS Extraction -----------------
 def extract_gis_from_card(card):
     try:
-        map_link = card.find_element(By.XPATH, '//*[@id="search_form"]/div[1]/main/div[3]/div[1]/div[2]/a[2]').get_attribute('href')
-        match = re.search(r'destination=([0-9.\-]+),([0-9.\-]+)', map_link)
-        if match:
-            lat, lon = match.groups()
-            gis_json = json.dumps({"lat": float(lat), "lon": float(lon)}, ensure_ascii=False)
-        else:
-            gis_json = json.dumps({"lat": None, "lon": None}, ensure_ascii=False)
+        link = card.find_element(By.XPATH, './/a[contains(@href,"destination=")]').get_attribute('href')
+        m = re.search(r'destination=([0-9.\-]+),([0-9.\-]+)', link)
+        if m:
+            return json.dumps({"lat": float(m.group(1)), "lon": float(m.group(2))}, ensure_ascii=False)
     except:
-        gis_json = json.dumps({"lat": None, "lon": None}, ensure_ascii=False)
-    return gis_json
+        pass
+    return json.dumps({"lat": None, "lon": None}, ensure_ascii=False)
 
-# ----------------- Browser setup -----------------
-def run_avval(start_url="https://avval.ir/"):
+def go_next_page():
     try:
-        chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        logging.info("✅ Browser opened successfully.")
+        next_btn = driver.find_element(By.XPATH, '//ul[@class="pagination"]/li/a[contains(text(),"»")]')
+        driver.execute_script("arguments[0].click();", next_btn)
+        time.sleep(2)
+        logging.info("➡ Moved to next page.")
+        return True
+    except NoSuchElementException:
+        logging.info("ℹ️ No next page button.")
+        return False
     except Exception as e:
-        logging.error(f"❌ Failed to start browser: {e}")
-        return
+        logging.warning(f"⚠️ Cannot go to next page: {e}")
+        return False
+
+# ----------------- Extract Data -----------------
+def extract_data(category_name, subcat_name, sub_name, sub_link):
+    try:
+        
+        location_box =wait.until(EC.presence_of_element_located((By.XPATH, "//input[contains(@class, 'input-style') and contains(@class, 'where')]")))
+        location_box.click()
+        time.sleep(0.1)
+        location_box.clear()
+        time.sleep(0.1)
+        location_box.send_keys(Keys.ENTER)
+        
+       
+        dropdown = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
+        )
+        dropdown.click()
+        time.sleep(1)
+
+        options = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
+        logging.info(f"📍 Provinces found: {len(options)}")
+
+        for i in range(len(options)):
+            driver.get(sub_link)
+            time.sleep(2)
+
+            dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
+            dropdown.click()
+            time.sleep(1)
+
+            all_opts = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
+            province = all_opts[i]
+            province_name = province.text.strip()
+            logging.info(f"➡ Selecting province: {province_name}")
+
+            scroll_click(province)
+            time.sleep(1)
+
+            try:
+                filter_btn = driver.find_element(By.XPATH, '//button[contains(@class,"filter-submit")]')
+                filter_btn.click()
+                time.sleep(2)
+            except:
+                logging.warning("⚠ Filter button not found!")
+
+            try:
+                no_result = driver.find_element(
+                    By.XPATH,
+                    '//p[contains(@class,"search-count") and contains(text(),"نتیجه‌ای یافت نشد")]'
+                )
+                if no_result:
+                    logging.info(f"ℹ️ No results for province: {province_name} , skipping...")
+                    continue
+            except NoSuchElementException:
+                pass
+            duplicate_count = 0
+            while True:
+                time.sleep(2)
+               
+
+                cards = driver.find_elements(By.XPATH, '//div[@class="content"]')
+                logging.info(f"📦 Cards found: {len(cards)}")
+
+                for card in cards:
+                    try:
+                        name = get_text_safe(card.find_element(By.XPATH, './/h2/a'))
+                    except:
+                        name = ""
+
+                    try:
+                        specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
+                    except:
+                        specialty = ""
+
+                    try:
+                        phones = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="phone"]/span')]
+                        phone_number = ", ".join(phones)
+                    except:
+                        phone_number = ""
+
+                    try:
+                        address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
+                    except:
+                        address = ""
+
+                    try:
+                        emails = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="email"]/span')]
+                        email = ", ".join(emails)
+                    except:
+                        email = ""
+
+                    gis = extract_gis_from_card(card)
+
+                    if phone_number in existing_phones:
+                        duplicate_count += 1
+                        logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
+                        if duplicate_count > 5:
+                            logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
+                            break
+                        continue
+
+                    row = [
+                        name, specialty, phone_number, address, email,
+                        category_name, subcat_name, sub_name, gis
+                    ]
+
+                    save_to_database(row)
+
+                if not go_next_page():
+                    break
+
+    except Exception as e:
+        logging.error(f"❌ Province loop error: {e}")
+existing_phones = load_existing_phones(cursor)
+
+# ----------------- Main Loop -----------------
+try:
+    categories = wait.until(
+        EC.presence_of_all_elements_located((By.XPATH, '//*[@id="directory"]/div[1]/ul/li'))
+    )
+except:
+    logging.error("❌ Cannot load categories.")
+    driver.quit()
+    exit()
+
+logging.info(f"📂 Category count: {len(categories)}")
+
+for c_idx in range(len(categories)):
+    categories = driver.find_elements(By.XPATH, '//*[@id="directory"]/div[1]/ul/li')
+    cat = categories[c_idx]
+    cat_name = get_text_safe(cat)
+
+    logging.info(f"======== CATEGORY: {cat_name} ========")
+    scroll_click(cat)
+    time.sleep(1)
+
+    subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
+    for s_idx in range(len(subcats)):
+        subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
+        subcat = subcats[s_idx]
+        subcat_name = get_text_safe(subcat)
+
+        logging.info(f"   ➜ SubCategory: {subcat_name}")
+        scroll_click(subcat)
+        time.sleep(1)
+
+        subs = driver.find_elements(By.XPATH, "//*[@id='directory']/div[1]//a")
+        subs_info_list = []
+
+        for sub in subs:
+            sub_link = sub.get_attribute("href")
+            subs_info_list.append((sub_link))
+
+        for sub_link in subs_info_list:
+            driver.get(sub_link)
+            time.sleep(2)
+
+            try:
+                h1 = driver.find_element(By.TAG_NAME, "h1")
+                full_text = h1.text
+                sub_name = clean_sub_name(full_text)
+            except NoSuchElementException:
+                sub_name = ""
+
+            logging.info(f"      ➜ Subsidiary: {sub_name}")
+
+            extract_data(cat_name, subcat_name, sub_name, sub_link)
 
     driver.get(start_url)
-    logging.info(f"🌐 Opened start URL: {start_url}")
+    time.sleep(2)
 
-    # ----------------- Helper -----------------
-    def get_text_safe(xpath, parent):
-        try:
-            el = parent.find_element(By.XPATH, xpath)
-            return el.text.strip()
-        except:
-            return ""
-
-    def get_texts_safe(xpath, parent):
-        try:
-            els = parent.find_elements(By.XPATH, xpath)
-            return ', '.join([el.text.strip() for el in els if el.text.strip()])
-        except:
-            return ""
-
-    # ----------------- Extract data -----------------
-    def extract_data_from_page():
-        try:
-            cards = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.XPATH, '//div[@class="content"]'))
-            )
-            logging.info(f"📦 Found {len(cards)} cards on this page.")
-        except TimeoutException:
-            logging.warning("⚠️ No cards found!")
-            return False
-
-        duplicate_count = 0  # شمارنده‌ی شماره‌های تکراری
-
-        for card in cards:
-            name = get_text_safe('.//h2/a', card)
-            specialty = get_text_safe('.//div[contains(@class,"keywords")]', card)
-            phone_number = get_texts_safe('.//div[@data-print-adv="phone"]/span', card)
-            address = get_text_safe('.//p[@data-print-adv="address"]', card)
-            email = get_text_safe('.//div[@data-print-adv="email"]/span', card)
-            category = get_text_safe('//h1', driver)
-            gis_json = extract_gis_from_card(card)
-
-            # بررسی تکراری بودن
-            if phone_number in existing_phones:
-                duplicate_count += 1
-                logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
-                if duplicate_count > 5:
-                    logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
-                    return True
-                continue
-
-            data_to_save = [name, specialty, phone_number, address, email, category, gis_json]
-            save_to_database(data_to_save, existing_phones, cursor, conn)
-            logging.info(f"🟢 Extracted: {name} | {specialty} | {phone_number} | {address} | {email} | {category} | {gis_json}")
-
-        return False  # ادامه بده
-
-    # ----------------- Pagination -----------------
-    def go_next_page():
-        try:
-            next_btn = driver.find_element(By.XPATH, '//ul[@class="pagination"]/li/a[contains(text(),"»")]')
-            driver.execute_script("arguments[0].click();", next_btn)
-            time.sleep(2)
-            logging.info("➡ Moved to next page.")
-            return True
-        except NoSuchElementException:
-            logging.info("ℹ️ No next page button.")
-            return False
-        except Exception as e:
-            logging.warning(f"⚠️ Cannot go to next page: {e}")
-            return False
-
-    # ----------------- Loop through categories -----------------
-    try:
-        categories = WebDriverWait(driver, 10).until(
-            EC.presence_of_all_elements_located((By.XPATH, '//*[@id="directory"]/div[1]//a'))
-        )
-        logging.info(f"📚 Found {len(categories)} categories.")
-    except TimeoutException:
-        logging.error("❌ Categories not found!")
-        driver.quit()
-        return
-
-    category_links = [cat.get_attribute("href") for cat in categories if cat.get_attribute("href")]
-
-    for i, link in enumerate(category_links):
-        driver.get(link)
-        time.sleep(2)
-        logging.info(f"➡ Entered category: {link}")
-
-        while True:
-            skip_category = extract_data_from_page()
-            if skip_category:
-                logging.info("⏭ Skipping to next category due to too many duplicates.")
-                break
-            if not go_next_page():
-                break
-
-        if (i + 1) % 5 == 0:
-            logging.info("💤 Short break to avoid blocking...")
-            time.sleep(5)
-
-    driver.quit()
-    logging.info("✅ Scraping completed.")
-
-# ----------------- Main -----------------
-if __name__ == "__main__":
-    conn, cursor = connect_to_database()
-    if conn is None:
-        exit()
-
-    # 🔹 Load existing phones before start
-    existing_phones = load_existing_phones(cursor)
-
-    start_url = input("🌐 Enter start URL (default https://avval.ir/): ").strip()
-    if not start_url:
-        start_url = "https://avval.ir/"
-    run_avval(start_url)
+logging.info("✅ Scraping finished successfully!")
+driver.quit()
+conn.close()
