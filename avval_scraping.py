@@ -26,11 +26,6 @@ cursor = conn.cursor()
 
 def save_to_database(data):
     try:
-        phone_number = data[2]
-        if phone_number in existing_phones:
-            logging.info(f"⚠️ Duplicate phone skipped: {phone_number}")
-            return
-
         sql = """
             INSERT INTO avval_data
             (name, specialty, phone_number, address, email, category, subcategory, subsidiary, gis)
@@ -40,6 +35,7 @@ def save_to_database(data):
         cursor.execute(sql, data)
         conn.commit()
         logging.info(f"💾 Saved: {data[0]}")
+        # TODO existing_phones.append(phone) also split |
     except Exception as e:
         logging.error(f"❌ DB error: {e}")
         conn.rollback()
@@ -66,23 +62,23 @@ def scroll_click(element):
         driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
         time.sleep(0.4)
         element.click()
-        time.sleep(0.7)
+        # time.sleep(0.7)
     except ElementClickInterceptedException:
         driver.execute_script("arguments[0].click();", element)
-        time.sleep(0.7)
+        # time.sleep(0.7)
 
 def get_text_safe(el):
     try:
         return el.text.strip()
     except:
-        return ""
+        return "NoTextFound."
 
 def load_existing_phones(cursor):
     """Load all existing phone numbers from database into a set"""
     existing = set()
     cursor.execute("SELECT phone_number FROM avval_data WHERE phone_number IS NOT NULL AND phone_number != ''")
     for (phone,) in cursor.fetchall():
-        existing.add(phone.strip())
+        existing.add(phone.strip()) # split |
     logging.info(f"📱 Loaded {len(existing)} existing phone numbers from database.")
     return existing
 
@@ -107,7 +103,7 @@ def wait_for_dropdown(driver, timeout=10):
 
 def extract_gis_from_card(card):
     try:
-        link = card.find_element(By.XPATH, './/a[contains(@href,"destination=")]').get_attribute('href')
+        link = card.find_element(By.XPATH, '//a[contains(@href,"destination=")]').get_attribute('href')
         m = re.search(r'destination=([0-9.\-]+),([0-9.\-]+)', link)
         if m:
             return json.dumps({"lat": float(m.group(1)), "lon": float(m.group(2))}, ensure_ascii=False)
@@ -118,6 +114,9 @@ def extract_gis_from_card(card):
 def go_next_page():
     try:
         next_btn = driver.find_element(By.XPATH, '//ul[@class="pagination"]/li/a[contains(text(),"»")]')
+        #if has inactive , logging.info("ℹ️ No other card exist.")
+        #return False
+        
         driver.execute_script("arguments[0].click();", next_btn)
         time.sleep(2)
         logging.info("➡ Moved to next page.")
@@ -133,30 +132,30 @@ def go_next_page():
 def extract_data(category_name, subcat_name, sub_name, sub_link):
     try:
         
-        location_box =wait.until(EC.presence_of_element_located((By.XPATH, "//input[contains(@class, 'input-style') and contains(@class, 'where')]")))
-        location_box.click()
-        time.sleep(0.1)
-        location_box.clear()
-        time.sleep(0.1)
-        location_box.send_keys(Keys.ENTER)
+        # location_box =wait.until(EC.presence_of_element_located((By.XPATH, "//input[contains(@class, 'input-style') and contains(@class, 'where')]")))
+        # location_box.click()
+        # time.sleep(0.1)
+        # location_box.clear()
+        # time.sleep(0.1)
+        # location_box.send_keys(Keys.ENTER)
         
        
-        dropdown = wait.until(
-            EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
-        )
-        dropdown.click()
-        time.sleep(1)
+        # dropdown = wait.until(
+        #     EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
+        # )
+        # dropdown.click()
+        # time.sleep(1)
 
         options = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
         logging.info(f"📍 Provinces found: {len(options)}")
 
         for i in range(len(options)):
-            driver.get(sub_link)
-            time.sleep(2)
+            #driver.get(sub_link)
+            #time.sleep(2)
 
-            dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
-            dropdown.click()
-            time.sleep(1)
+            # dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
+            # dropdown.click()
+            # time.sleep(1)
 
             all_opts = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
             province = all_opts[i]
@@ -164,12 +163,12 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
             logging.info(f"➡ Selecting province: {province_name}")
 
             scroll_click(province)
-            time.sleep(1)
+            time.sleep(0.5)
 
             try:
                 filter_btn = driver.find_element(By.XPATH, '//button[contains(@class,"filter-submit")]')
                 filter_btn.click()
-                time.sleep(2)
+                time.sleep(2) # TODO not needed
             except:
                 logging.warning("⚠ Filter button not found!")
 
@@ -183,51 +182,43 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     continue
             except NoSuchElementException:
                 pass
+                
             duplicate_count = 0
             while True:
-                time.sleep(2)
-               
+                # time.sleep(2)
 
                 cards = driver.find_elements(By.XPATH, '//div[@class="content"]')
                 logging.info(f"📦 Cards found: {len(cards)}")
 
                 for card in cards:
-                    try:
-                        name = get_text_safe(card.find_element(By.XPATH, './/h2/a'))
-                    except:
-                        name = ""
-
-                    try:
-                        specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
-                    except:
-                        specialty = ""
+                    name = get_text_safe(card.find_element(By.XPATH, './/h2/a'))
+                    specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
 
                     try:
                         phones = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="phone"]/span')]
-                        phone_number = ", ".join(phones)
+                        phone_number = "|".join(phones)
                     except:
-                        phone_number = ""
-
-                    try:
-                        address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
-                    except:
-                        address = ""
+                        phone_number: 'NoPhoneFound'
+                    
+                    address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
 
                     try:
                         emails = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="email"]/span')]
-                        email = ", ".join(emails)
+                        email = "|".join(emails)
                     except:
-                        email = ""
+                        email = "NoEmailFound"
 
                     gis = extract_gis_from_card(card)
 
-                    if phone_number in existing_phones:
+                    if phone_number in existing_phones and phone_number is not 'NoPhoneFound':
                         duplicate_count += 1
                         logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
                         if duplicate_count > 5:
                             logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
                             break
                         continue
+                    else:
+                        duplicate_count = 0
 
                     row = [
                         name, specialty, phone_number, address, email,
@@ -240,7 +231,11 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     break
 
     except Exception as e:
+        driver.quit()
+        conn.close()
         logging.error(f"❌ Province loop error: {e}")
+
+
 existing_phones = load_existing_phones(cursor)
 
 # ----------------- Main Loop -----------------
