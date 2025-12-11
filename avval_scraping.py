@@ -17,10 +17,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # ----------------- Database setup -----------------
 conn = mysql.connector.connect(
     host='localhost',
-    user='root',
-    password='',
-    port=3307,
-    database='scraping_data'
+    user='phpmyadmin',
+    password='phpmy@dmin',
+    port=3306,
+    database='iranian_users'
 )
 cursor = conn.cursor()
 
@@ -42,13 +42,13 @@ def save_to_database(data):
 
 # ----------------- Browser setup -----------------
 chrome_options = Options()
-chrome_options.add_argument("--headless=new")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--disable-gpu")
+# chrome_options.add_argument("--headless=new")
+# chrome_options.add_argument("--no-sandbox")
+# chrome_options.add_argument("--disable-dev-shm-usage")
+# chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--window-size=1280,1024")
 
-service = Service("chromedriver.exe")
+service = Service("bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 wait = WebDriverWait(driver, 10)
 
@@ -140,24 +140,26 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
         # location_box.send_keys(Keys.ENTER)
         
        
-        # dropdown = wait.until(
-        #     EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
-        # )
-        # dropdown.click()
-        # time.sleep(1)
+        dropdown = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
+        )
+        dropdown.click()
+        time.sleep(1)
 
         options = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
         logging.info(f"📍 Provinces found: {len(options)}")
 
         for i in range(len(options)):
-            #driver.get(sub_link)
-            #time.sleep(2)
+            # driver.get(sub_link)
+            # time.sleep(2)
 
-            # dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
-            # dropdown.click()
-            # time.sleep(1)
+            dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
+            dropdown.click()
+            time.sleep(1)
 
             all_opts = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
+            logging.info('index'+str(i)+"of"+str(len(options))+' '+str(len(all_opts)))
+
             province = all_opts[i]
             province_name = province.text.strip()
             logging.info(f"➡ Selecting province: {province_name}")
@@ -198,7 +200,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                         phones = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="phone"]/span')]
                         phone_number = "|".join(phones)
                     except:
-                        phone_number: 'NoPhoneFound'
+                        phone_number= 'NoPhoneFound'
                     
                     address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
 
@@ -210,7 +212,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
 
                     gis = extract_gis_from_card(card)
 
-                    if phone_number in existing_phones and phone_number is not 'NoPhoneFound':
+                    if phone_number in existing_phones and phone_number != 'NoPhoneFound':
                         duplicate_count += 1
                         logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
                         if duplicate_count > 5:
