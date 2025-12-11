@@ -150,15 +150,14 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
         logging.info(f"📍 Provinces found: {len(options)}")
 
         for i in range(len(options)):
-            # driver.get(sub_link)
-            # time.sleep(2)
+            driver.get(sub_link)
+            time.sleep(2)
 
             dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
             dropdown.click()
             time.sleep(1)
 
             all_opts = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
-            logging.info('index'+str(i)+"of"+str(len(options))+' '+str(len(all_opts)))
 
             province = all_opts[i]
             province_name = province.text.strip()
