@@ -214,7 +214,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     if phone_number in existing_phones and phone_number != 'NoPhoneFound':
                         duplicate_count += 1
                         logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
-                        if duplicate_count > 5:
+                        if duplicate_count >= 5:
                             logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
                             break
                         continue
