@@ -42,9 +42,9 @@ def save_to_database(data):
 
 # ----------------- Browser setup -----------------
 chrome_options = Options()
-chrome_options.add_argument("--headless=new")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
+# chrome_options.add_argument("--headless=new")
+# chrome_options.add_argument("--no-sandbox")
+# chrome_options.add_argument("--disable-dev-shm-usage")
 # chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--window-size=1280,1024")
 
@@ -111,16 +111,24 @@ def extract_gis_from_card(card):
         pass
     return json.dumps({"lat": None, "lon": None}, ensure_ascii=False)
 
-def go_next_page():
+def go_next_page(sub_link):
     try:
-        next_btn = driver.find_element(By.XPATH, '//ul[@class="pagination"]/li/a[contains(text(),"»")]')
+        next_btn = driver.find_element(By.XPATH, '//li/a[contains(text(), "بعد")]')
         #if has inactive , logging.info("ℹ️ No other card exist.")
         #return False
         
         driver.execute_script("arguments[0].click();", next_btn)
-        time.sleep(2)
-        logging.info("➡ Moved to next page.")
-        return True
+
+        elements = driver.find_elements(By.XPATH, "//div[contains(@class, 'attention')]")
+
+        if len(elements) > 1:
+            logging.info("ℹ️ Account limitation.")
+            driver.get(sub_link)
+            return False
+        else:
+            logging.info("➡ Moved to next page.")
+            return True
+
     except NoSuchElementException:
         logging.info("ℹ️ No next page button.")
         return False
@@ -139,21 +147,19 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
         # time.sleep(0.1)
         # location_box.send_keys(Keys.ENTER)
         
-       
-        dropdown = wait.until(
-            EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
-        )
-        dropdown.click()
-        time.sleep(1)
+        #
+        # dropdown = wait.until(
+        #     EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
+        # )
+        # dropdown.click()
+        # time.sleep(1)
+        #
+        # options = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
+        # logging.info(f"📍 Provinces found: {len(options)}")
 
-        options = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
-        logging.info(f"📍 Provinces found: {len(options)}")
-
-        for i in range(len(options)):
-            driver.get(sub_link)
-            time.sleep(2)
-
-            dropdown = wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
+        for i in range(31):
+            dropdown = wait.until(
+                EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
             dropdown.click()
             time.sleep(1)
 
@@ -180,6 +186,10 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 )
                 if no_result:
                     logging.info(f"ℹ️ No results for province: {province_name} , skipping...")
+                    driver.get(sub_link)
+                    time.sleep(2)
+
+
                     continue
             except NoSuchElementException:
                 pass
@@ -228,7 +238,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
 
                     save_to_database(row)
 
-                if not go_next_page():
+                if not go_next_page(sub_link):
                     break
 
     except Exception as e:
@@ -279,7 +289,6 @@ for c_idx in range(len(categories)):
 
         for sub_link in subs_info_list:
             driver.get(sub_link)
-            time.sleep(2)
 
             try:
                 h1 = driver.find_element(By.TAG_NAME, "h1")
@@ -293,7 +302,6 @@ for c_idx in range(len(categories)):
             extract_data(cat_name, subcat_name, sub_name, sub_link)
 
     driver.get(start_url)
-    time.sleep(2)
 
 logging.info("✅ Scraping finished successfully!")
 driver.quit()
