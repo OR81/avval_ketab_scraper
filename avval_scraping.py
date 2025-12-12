@@ -11,16 +11,21 @@ import logging
 import json
 import re
 import mysql.connector
+import os
+from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Load environment variables
+load_dotenv()
+
 # ----------------- Database setup -----------------
 conn = mysql.connector.connect(
-    host='localhost',
-    user='phpmyadmin',
-    password='phpmy@dmin',
-    port=3306,
-    database='iranian_users'
+    host=os.getenv('DB_HOST', 'localhost'),
+    user=os.getenv('DB_USER', 'phpmyadmin'),
+    password=os.getenv('DB_PASSWORD', 'phpmy@dmin'),
+    port=int(os.getenv('DB_PORT', 3306)),
+    database=os.getenv('DB_NAME', 'iranian_users')
 )
 cursor = conn.cursor()
 
@@ -42,10 +47,31 @@ def save_to_database(data):
 
 # ----------------- Browser setup -----------------
 chrome_options = Options()
-# chrome_options.add_argument("--headless=new")
-# chrome_options.add_argument("--no-sandbox")
-# chrome_options.add_argument("--disable-dev-shm-usage")
-# chrome_options.add_argument("--disable-gpu")
+# Only run headless if DEBUG is not True
+debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
+if not debug_mode:
+    # اجرای مرورگر بدون نمایش پنجره (headless mode)
+    chrome_options.add_argument("--headless=new")
+    
+# گزینه‌های ضروری برای اجرا در لینوکس بدون GUI
+# غیرفعال کردن sandbox برای اجرا در محیط‌های محدود (مثل Docker)
+chrome_options.add_argument("--no-sandbox")
+# کاهش استفاده از حافظه مشترک برای جلوگیری از crash در سرورها
+chrome_options.add_argument("--disable-dev-shm-usage")
+# غیرفعال کردن GPU (نیاز نیست در سرور بدون GUI)
+chrome_options.add_argument("--disable-gpu")
+# غیرفعال کردن rasterizer نرم‌افزاری (بهینه‌سازی عملکرد)
+chrome_options.add_argument("--disable-software-rasterizer")
+# غیرفعال کردن افزونه‌ها (کاهش مصرف منابع)
+chrome_options.add_argument("--disable-extensions")
+# غیرفعال کردن ویژگی‌های غیرضروری برای بهبود عملکرد
+chrome_options.add_argument("--disable-features=TranslateUI,VizDisplayCompositor")
+# بهینه‌سازی برای اجرای background
+chrome_options.add_argument("--disable-background-networking")
+chrome_options.add_argument("--disable-background-timer-throttling")
+chrome_options.add_argument("--disable-renderer-backgrounding")
+chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+# تنظیم اندازه پنجره مرورگر (عرض x ارتفاع)
 chrome_options.add_argument("--window-size=1280,1024")
 
 service = Service("bin/chromedriver")
@@ -139,24 +165,6 @@ def go_next_page(sub_link):
 # ----------------- Extract Data -----------------
 def extract_data(category_name, subcat_name, sub_name, sub_link):
     try:
-        
-        # location_box =wait.until(EC.presence_of_element_located((By.XPATH, "//input[contains(@class, 'input-style') and contains(@class, 'where')]")))
-        # location_box.click()
-        # time.sleep(0.1)
-        # location_box.clear()
-        # time.sleep(0.1)
-        # location_box.send_keys(Keys.ENTER)
-        
-        #
-        # dropdown = wait.until(
-        #     EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
-        # )
-        # dropdown.click()
-        # time.sleep(1)
-        #
-        # options = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
-        # logging.info(f"📍 Provinces found: {len(options)}")
-
         for i in range(31):
             dropdown = wait.until(
                 EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
@@ -238,8 +246,9 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
 
                     save_to_database(row)
 
-                if not go_next_page(sub_link):
+                if not (duplicate_count < 5 and go_next_page(sub_link)):
                     break
+
 
     except Exception as e:
         driver.quit()
@@ -261,45 +270,44 @@ except:
 
 logging.info(f"📂 Category count: {len(categories)}")
 
-for c_idx in range(len(categories)):
-    categories = driver.find_elements(By.XPATH, '//*[@id="directory"]/div[1]/ul/li')
-    cat = categories[c_idx]
+for cat in categories:
     cat_name = get_text_safe(cat)
 
     logging.info(f"======== CATEGORY: {cat_name} ========")
     scroll_click(cat)
     time.sleep(1)
 
+    subs_info_list = []
     subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
-    for s_idx in range(len(subcats)):
-        subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
-        subcat = subcats[s_idx]
+    for subcat in subcats:
         subcat_name = get_text_safe(subcat)
 
         logging.info(f"   ➜ SubCategory: {subcat_name}")
+        if subcat_name == '':
+            break
+
         scroll_click(subcat)
-        time.sleep(1)
+        time.sleep(0.1)
 
         subs = driver.find_elements(By.XPATH, "//*[@id='directory']/div[1]//a")
-        subs_info_list = []
 
         for sub in subs:
             sub_link = sub.get_attribute("href")
-            subs_info_list.append((sub_link))
+            subs_info_list.append((subcat_name, sub_link))
 
-        for sub_link in subs_info_list:
-            driver.get(sub_link)
+    for subcat_name,sub_link in subs_info_list:
+        driver.get(sub_link)
 
-            try:
-                h1 = driver.find_element(By.TAG_NAME, "h1")
-                full_text = h1.text
-                sub_name = clean_sub_name(full_text)
-            except NoSuchElementException:
-                sub_name = ""
+        try:
+            h1 = driver.find_element(By.TAG_NAME, "h1")
+            full_text = h1.text
+            sub_name = clean_sub_name(full_text)
+        except NoSuchElementException:
+            sub_name = ""
 
-            logging.info(f"      ➜ Subsidiary: {sub_name}")
+        logging.info(f"      ➜ Subsidiary: {sub_name} of {subcat_name}")
 
-            extract_data(cat_name, subcat_name, sub_name, sub_link)
+        extract_data(cat_name, subcat_name, sub_name, sub_link)
 
     driver.get(start_url)
 
