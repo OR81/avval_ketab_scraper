@@ -97,11 +97,7 @@ def load_existing_phones(cursor):
 
     for row in cursor.fetchall():
         phones = row['phone_number']
-
-        for phone in phones.split('|'):
-            phone = phone.strip()
-            if phone:
-                existing.add(phone)
+        existing.add(phones)
 
     logging.info(f"📱 Loaded {len(existing)} existing phone numbers from database.")
 
@@ -212,6 +208,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 for card in cards:
                     name = get_text_safe(card.find_element(By.XPATH, './/h2/a'))
                     specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
+                    specialty += ' | ' + get_text_safe(card.find_element(By.XPATH, './/p[contains(@class,"print-postal-hidden")]'))
 
                     try:
                         phones_raw = [x.text.strip() for x in
