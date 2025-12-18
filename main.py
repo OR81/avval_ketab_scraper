@@ -1,16 +1,16 @@
 import json
 import logging
-import pymysql
 import os
 import re
 import time
+
+import pymysql
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -20,15 +20,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 load_dotenv()
 
 # ----------------- Database setup -----------------
-conn = pymysql.connect(
-    host=os.getenv('DB_HOST', 'localhost'),
-    user=os.getenv('DB_USER', 'root'),
-    password=os.getenv('DB_PASSWORD', ''),
-    port=int(os.getenv('DB_PORT', 3307)),
-    database=os.getenv('DB_NAME', 'scraping_data'),
-    charset='utf8mb4',
-    cursorclass=pymysql.cursors.DictCursor
-)
+conn = pymysql.connect(host=os.getenv('DB_HOST', 'localhost'), user=os.getenv('DB_USER', 'root'),
+                       password=os.getenv('DB_PASSWORD', ''), port=int(os.getenv('DB_PORT', 3307)),
+                       database=os.getenv('DB_NAME', 'scraping_data'), charset='utf8mb4',
+                       cursorclass=pymysql.cursors.DictCursor)
 cursor = conn.cursor()
 
 
@@ -52,11 +47,10 @@ chrome_options = Options()
 debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
 if not debug_mode:
     chrome_options.add_argument("--headless=new")
-
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--disable-software-rasterizer")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
 chrome_options.add_argument("--disable-extensions")
 chrome_options.add_argument("--disable-features=TranslateUI,VizDisplayCompositor")
 chrome_options.add_argument("--disable-background-networking")
@@ -138,8 +132,7 @@ def expand_phone_range(phone: str):
 def wait_for_dropdown(driver, timeout=10):
     try:
         return WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]"))
-        )
+            EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
     except:
         return None
 
