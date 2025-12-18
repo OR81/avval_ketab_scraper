@@ -1,4 +1,4 @@
 selenium
-mysql-connector-python
+PyMySQL
 python-dotenv
 
