@@ -78,6 +78,13 @@ def scroll_click(element):
         driver.execute_script("arguments[0].click();", element)
 
 
+def get_element_text_safe(card, el):
+    try:
+        element = card.find_element(By.XPATH, el)
+        return element.text.strip()
+    except:
+        return "NoTextFound."
+
 def get_text_safe(el):
     try:
         return el.text.strip()
@@ -206,9 +213,9 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 logging.info(f"📦 Cards found: {len(cards)}")
 
                 for card in cards:
-                    name = get_text_safe(card.find_element(By.XPATH, './/h2/a'))
-                    specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
-                    specialty += ' | ' + get_text_safe(card.find_element(By.XPATH, './/p[contains(@class,"print-postal-hidden")]'))
+                    name = get_element_text_safe(card, './/h2/a')
+                    specialty = get_element_text_safe(card, './/div[contains(@class,"keywords")]')
+                    specialty += ' | ' + get_element_text_safe(card, './/p[contains(@class,"print-postal-hidden")]')
 
                     try:
                         phones_raw = [x.text.strip() for x in
@@ -221,7 +228,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     except:
                         phone_number = "NoPhoneFoundInException"
 
-                    address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
+                    address = get_element_text_safe(card, './/p[@data-print-adv="address"]')
 
                     try:
                         emails = [x.text.strip() for x in
