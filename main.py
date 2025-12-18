@@ -251,8 +251,8 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     break
 
     except Exception as e:
-        driver.quit()
-        conn.close()
+        # driver.quit()
+        # conn.close()
         logging.error(f"❌ Province loop error: {e}")
 
 
