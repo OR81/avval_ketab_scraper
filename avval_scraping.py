@@ -22,10 +22,10 @@ load_dotenv()
 # ----------------- Database setup -----------------
 conn = mysql.connector.connect(
     host=os.getenv('DB_HOST', 'localhost'),
-    user=os.getenv('DB_USER', 'phpmyadmin'),
-    password=os.getenv('DB_PASSWORD', 'phpmy@dmin'),
-    port=int(os.getenv('DB_PORT', 3306)),
-    database=os.getenv('DB_NAME', 'iranian_users')
+    user=os.getenv('DB_USER', 'root'),
+    password=os.getenv('DB_PASSWORD', ''),
+    port=int(os.getenv('DB_PORT', 3307)),
+    database=os.getenv('DB_NAME', 'scraping_data')
 )
 cursor = conn.cursor()
 
@@ -74,7 +74,7 @@ chrome_options.add_argument("--disable-backgrounding-occluded-windows")
 # تنظیم اندازه پنجره مرورگر (عرض x ارتفاع)
 chrome_options.add_argument("--window-size=1280,1024")
 
-service = Service("bin/chromedriver")
+service = Service("chromedriver.exe")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 wait = WebDriverWait(driver, 10)
 
@@ -114,6 +114,19 @@ def clean_sub_name(full_text):
     if "در" in text:
         text = text.split("در")[0].strip()
     return text
+
+def  expand_phone_range(phone:str):
+    phone =phone.replace("-", "").replace(" ", "")
+    if "~" not in phone:
+        return [phone]
+    
+    base , end =phone.split("~")
+    start_suffix = base[-2:]
+    prefix = base[:-2]
+    start = int(start_suffix)
+    end = int(end)
+    
+    return [f"{prefix}{i:02d}" for i in range(start, end + 1)]
 
 
 
@@ -214,10 +227,19 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
 
                     try:
-                        phones = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="phone"]/span')]
-                        phone_number = "|".join(phones)
-                    except:
-                        phone_number= 'NoPhoneFound'
+                        phones_raw =[
+                            x.text.strip()
+                            for x  in card.find_elements(By.XPATH , './/div[@data-print-adv="phone"]/span')
+                            
+                        ]
+                        phones =[]
+                        for p in phones_raw:
+                          for expanded in expand_phone_range(p):
+                              if expanded.startswith("09"):
+                                  phones.append(expanded)
+                        phone_number = "|".join(phones) if phones else "NoPhoneFound"  
+                    except Exception :
+                           phone_number = "NoPhoneFound"          
                     
                     address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
 
