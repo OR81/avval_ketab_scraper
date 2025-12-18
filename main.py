@@ -47,12 +47,13 @@ chrome_options = Options()
 debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
 if not debug_mode:
     chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
     chrome_options.add_argument("--disable-software-rasterizer")
+    chrome_options.add_argument("--disable-gpu")
+
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-extensions")
-chrome_options.add_argument("--disable-features=TranslateUI,VizDisplayCompositor")
 chrome_options.add_argument("--disable-background-networking")
 chrome_options.add_argument("--disable-background-timer-throttling")
 chrome_options.add_argument("--disable-renderer-backgrounding")
