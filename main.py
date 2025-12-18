@@ -85,6 +85,7 @@ def get_element_text_safe(card, el):
     except:
         return "NoTextFound."
 
+
 def get_text_safe(el):
     try:
         return el.text.strip()
@@ -213,10 +214,6 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 logging.info(f"📦 Cards found: {len(cards)}")
 
                 for card in cards:
-                    name = get_element_text_safe(card, './/h2/a')
-                    specialty = get_element_text_safe(card, './/div[contains(@class,"keywords")]')
-                    specialty += ' | ' + get_element_text_safe(card, './/p[contains(@class,"print-postal-hidden")]')
-
                     try:
                         phones_raw = [x.text.strip() for x in
                                       card.find_elements(By.XPATH, './/div[@data-print-adv="phone"]/span')]
@@ -227,15 +224,6 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                         phone_number = "|".join(phones) if phones else "NoPhoneFoundInXpath"
                     except:
                         phone_number = "NoPhoneFoundInException"
-
-                    address = get_element_text_safe(card, './/p[@data-print-adv="address"]')
-
-                    try:
-                        emails = [x.text.strip() for x in
-                                  card.find_elements(By.XPATH, './/div[@data-print-adv="email"]/span')]
-                        email = "|".join(emails)
-                    except:
-                        email = "NoEmailFound"
 
                     gis = extract_gis_from_card(card)
 
@@ -248,6 +236,20 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                         continue
                     else:
                         duplicate_count = 0
+
+                    address = get_element_text_safe(card, './/p[@data-print-adv="address"]')
+
+                    try:
+                        emails = [x.text.strip() for x in
+                                  card.find_elements(By.XPATH, './/div[@data-print-adv="email"]/span')]
+                        email = "|".join(emails)
+                    except:
+                        email = "NoEmailFound"
+
+
+                    name = get_element_text_safe(card, './/h2/a')
+                    specialty = get_element_text_safe(card, './/div[contains(@class,"keywords")]')
+                    specialty += ' | ' + get_element_text_safe(card, './/p[contains(@class,"print-postal-hidden")]')
 
                     row = [name, specialty, phone_number, address, email, category_name, subcat_name, sub_name, gis]
                     save_to_database(row)
