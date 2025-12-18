@@ -65,7 +65,7 @@ chrome_options.add_argument("--disable-renderer-backgrounding")
 chrome_options.add_argument("--disable-backgrounding-occluded-windows")
 chrome_options.add_argument("--window-size=1280,1024")
 
-service = Service("bin/chromedriver")  # مسیر کروم درایور خود را چک کنید
+service = Service("bin/143-chromedriver")  # مسیر کروم درایور خود را چک کنید
 driver = webdriver.Chrome(service=service, options=chrome_options)
 wait = WebDriverWait(driver, 10)
 
