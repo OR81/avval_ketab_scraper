@@ -1,18 +1,18 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException
-from selenium.webdriver.common.keys import Keys
-import time
-import logging
 import json
-import re
+import logging
 import mysql.connector
 import os
+import re
+import time
 from dotenv import load_dotenv
+from selenium import webdriver
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -29,14 +29,15 @@ conn = mysql.connector.connect(
 )
 cursor = conn.cursor()
 
+
 def save_to_database(data):
     try:
         sql = """
-            INSERT INTO avval_data
-            (name, specialty, phone_number, address, email, category, subcategory, subsidiary, gis)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """
-        
+              INSERT INTO avval_data
+              (name, specialty, phone_number, address, email, category, subcategory, subsidiary, gis)
+              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) \
+              """
+
         cursor.execute(sql, data)
         conn.commit()
         logging.info(f"💾 Saved: {data[0]}")
@@ -45,6 +46,7 @@ def save_to_database(data):
         logging.error(f"❌ DB error: {e}")
         conn.rollback()
 
+
 # ----------------- Browser setup -----------------
 chrome_options = Options()
 # Only run headless if DEBUG is not True
@@ -52,7 +54,7 @@ debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
 if not debug_mode:
     # اجرای مرورگر بدون نمایش پنجره (headless mode)
     chrome_options.add_argument("--headless=new")
-    
+
 # گزینه‌های ضروری برای اجرا در لینوکس بدون GUI
 # غیرفعال کردن sandbox برای اجرا در محیط‌های محدود (مثل Docker)
 chrome_options.add_argument("--no-sandbox")
@@ -74,13 +76,13 @@ chrome_options.add_argument("--disable-backgrounding-occluded-windows")
 # تنظیم اندازه پنجره مرورگر (عرض x ارتفاع)
 chrome_options.add_argument("--window-size=1280,1024")
 
-service = Service("chromedriver.exe")
+service = Service("bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
 wait = WebDriverWait(driver, 10)
 
 start_url = "https://avval.ir/"
 driver.get(start_url)
-time.sleep(2)
+
 
 # ----------------- Helper Functions -----------------
 def scroll_click(element):
@@ -93,20 +95,23 @@ def scroll_click(element):
         driver.execute_script("arguments[0].click();", element)
         # time.sleep(0.7)
 
+
 def get_text_safe(el):
     try:
         return el.text.strip()
     except:
         return "NoTextFound."
 
+
 def load_existing_phones(cursor):
     """Load all existing phone numbers from database into a set"""
     existing = set()
     cursor.execute("SELECT phone_number FROM avval_data WHERE phone_number IS NOT NULL AND phone_number != ''")
     for (phone,) in cursor.fetchall():
-        existing.add(phone.strip()) # split |
+        existing.add(phone.strip())  # split |
     logging.info(f"📱 Loaded {len(existing)} existing phone numbers from database.")
     return existing
+
 
 def clean_sub_name(full_text):
     text = full_text.strip()
@@ -115,19 +120,19 @@ def clean_sub_name(full_text):
         text = text.split("در")[0].strip()
     return text
 
-def  expand_phone_range(phone:str):
-    phone =phone.replace("-", "").replace(" ", "")
+
+def expand_phone_range(phone: str):
+    phone = phone.replace("-", "").replace(" ", "")
     if "~" not in phone:
         return [phone]
-    
-    base , end =phone.split("~")
+
+    base, end = phone.split("~")
     start_suffix = base[-2:]
     prefix = base[:-2]
     start = int(start_suffix)
     end = int(end)
-    
-    return [f"{prefix}{i:02d}" for i in range(start, end + 1)]
 
+    return [f"{prefix}{i:02d}" for i in range(start, end + 1)]
 
 
 def wait_for_dropdown(driver, timeout=10):
@@ -140,6 +145,7 @@ def wait_for_dropdown(driver, timeout=10):
     except:
         return None
 
+
 def extract_gis_from_card(card):
     try:
         link = card.find_element(By.XPATH, '//a[contains(@href,"destination=")]').get_attribute('href')
@@ -150,12 +156,13 @@ def extract_gis_from_card(card):
         pass
     return json.dumps({"lat": None, "lon": None}, ensure_ascii=False)
 
+
 def go_next_page(sub_link):
     try:
         next_btn = driver.find_element(By.XPATH, '//li/a[contains(text(), "بعد")]')
-        #if has inactive , logging.info("ℹ️ No other card exist.")
-        #return False
-        
+        # if has inactive , logging.info("ℹ️ No other card exist.")
+        # return False
+
         driver.execute_script("arguments[0].click();", next_btn)
 
         elements = driver.find_elements(By.XPATH, "//div[contains(@class, 'attention')]")
@@ -174,6 +181,7 @@ def go_next_page(sub_link):
     except Exception as e:
         logging.warning(f"⚠️ Cannot go to next page: {e}")
         return False
+
 
 # ----------------- Extract Data -----------------
 def extract_data(category_name, subcat_name, sub_name, sub_link):
@@ -196,7 +204,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
             try:
                 filter_btn = driver.find_element(By.XPATH, '//button[contains(@class,"filter-submit")]')
                 filter_btn.click()
-                time.sleep(2) # TODO not needed
+                time.sleep(2)  # TODO not needed
             except:
                 logging.warning("⚠ Filter button not found!")
 
@@ -210,11 +218,10 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     driver.get(sub_link)
                     time.sleep(2)
 
-
                     continue
             except NoSuchElementException:
                 pass
-                
+
             duplicate_count = 0
             while True:
                 # time.sleep(2)
@@ -227,24 +234,24 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                     specialty = get_text_safe(card.find_element(By.XPATH, './/div[contains(@class,"keywords")]'))
 
                     try:
-                        phones_raw =[
+                        phones_raw = [
                             x.text.strip()
-                            for x  in card.find_elements(By.XPATH , './/div[@data-print-adv="phone"]/span')
-                            
+                            for x in card.find_elements(By.XPATH, './/div[@data-print-adv="phone"]/span')
                         ]
-                        phones =[]
+                        print(phones_raw)
+                        phones = []
                         for p in phones_raw:
-                          for expanded in expand_phone_range(p):
-                              if expanded.startswith("09"):
-                                  phones.append(expanded)
-                        phone_number = "|".join(phones) if phones else "NoPhoneFound"  
-                    except Exception :
-                           phone_number = "NoPhoneFound"          
-                    
+                            for expanded in expand_phone_range(p):
+                                phones.append(expanded)
+                        phone_number = "|".join(phones) if phones else "NoPhoneFoundInXpath"
+                    except Exception:
+                        phone_number = "NoPhoneFoundInException"
+
                     address = get_text_safe(card.find_element(By.XPATH, './/p[@data-print-adv="address"]'))
 
                     try:
-                        emails = [x.text.strip() for x in card.find_elements(By.XPATH, './/div[@data-print-adv="email"]/span')]
+                        emails = [x.text.strip() for x in
+                                  card.find_elements(By.XPATH, './/div[@data-print-adv="email"]/span')]
                         email = "|".join(emails)
                     except:
                         email = "NoEmailFound"
@@ -317,7 +324,7 @@ for cat in categories:
             sub_link = sub.get_attribute("href")
             subs_info_list.append((subcat_name, sub_link))
 
-    for subcat_name,sub_link in subs_info_list:
+    for subcat_name, sub_link in subs_info_list:
         driver.get(sub_link)
 
         try:
