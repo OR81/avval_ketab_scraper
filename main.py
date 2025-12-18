@@ -50,14 +50,14 @@ if not debug_mode:
     chrome_options.add_argument("--disable-features=VizDisplayCompositor")
     chrome_options.add_argument("--disable-software-rasterizer")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-background-networking")
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
 
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-extensions")
-chrome_options.add_argument("--disable-background-networking")
-chrome_options.add_argument("--disable-background-timer-throttling")
-chrome_options.add_argument("--disable-renderer-backgrounding")
-chrome_options.add_argument("--disable-backgrounding-occluded-windows")
 chrome_options.add_argument("--window-size=1280,1024")
 
 service = Service("bin/chromedriver")  # مسیر کروم درایور خود را چک کنید
