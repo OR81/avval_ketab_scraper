@@ -121,17 +121,23 @@ def clean_sub_name(full_text):
 
 
 def expand_phone_range(phone: str):
+    # حذف فاصله و خط تیره
     phone = phone.replace("-", "").replace(" ", "")
+
+    # اگر محدوده وجود ندارد، شماره را همانطور بازگردان
     if "~" not in phone:
         return [phone]
 
-    base, end = phone.split("~")
-    start_suffix = base[-2:]
-    prefix = base[:-2]
-    start = int(start_suffix)
-    end = int(end)
+    base, end_suffix = phone.split("~")
 
-    return [f"{prefix}{i:02d}" for i in range(start, end + 1)]
+    # تعداد ارقام پایانی برای شروع
+    start_suffix = base[-len(end_suffix):]
+    prefix = base[:-len(end_suffix)]
+
+    start = int(start_suffix)
+    end = int(end_suffix) + start - int(start_suffix)  # محاسبه عدد واقعی پایانی
+
+    return [f"{prefix}{i}" for i in range(start, end + 1)]
 
 
 def wait_for_dropdown(driver, timeout=10):
@@ -221,9 +227,9 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                         for p in phones_raw:
                             for expanded in expand_phone_range(p):
                                 phones.append(expanded)
-                        phone_number = "|".join(phones) if phones else "NoPhoneFoundInXpath"
+                        phone_number = "|".join(phones) if phones else "NoPhoneFoundInExpanded"
                     except:
-                        phone_number = "NoPhoneFoundInException"
+                        phone_number = "NoPhoneFoundInXpath"
 
                     gis = extract_gis_from_card(card)
 
@@ -232,6 +238,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                         logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
                         if duplicate_count >= 5:
                             logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
+                            # return
                             break
                         continue
                     else:
@@ -245,7 +252,6 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                         email = "|".join(emails)
                     except:
                         email = "NoEmailFound"
-
 
                     name = get_element_text_safe(card, './/h2/a')
                     specialty = get_element_text_safe(card, './/div[contains(@class,"keywords")]')
@@ -274,42 +280,54 @@ except:
     exit()
 
 logging.info(f"📂 Category count: {len(categories)}")
+skipped_categories = int(input('how many categories skipped? '))
 
-for cat in categories:
+for main_cat_index, cat in enumerate(categories):
+    if skipped_categories > main_cat_index:
+        continue
+
     cat_name = get_text_safe(cat)
     logging.info(f"======== CATEGORY: {cat_name} ========")
+    time.sleep(2)
     scroll_click(cat)
-    time.sleep(1)
+    time.sleep(2)
 
     subs_info_list = []
-    subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
-    for subcat in subcats:
+    # subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
+    subcats = driver.find_elements(By.XPATH, '//*[@id="tab-wrapper"]/div[' + str(
+        main_cat_index + 1) + ']//ul[@class="topic"]/li/button')
+    for sub_cat_index, subcat in enumerate(subcats):
         subcat_name = get_text_safe(subcat)
         logging.info(f"   ➜ SubCategory: {subcat_name}")
-        if subcat_name == '':
-            break
+        if subcat_name == '' or subcat_name == 'NoTextFound':
+            continue
 
         scroll_click(subcat)
         time.sleep(0.1)
 
-        subs = driver.find_elements(By.XPATH, "//*[@id='directory']/div[1]//a")
+        subs = driver.find_elements(By.XPATH,
+                                    '//*[@id="tab-wrapper"]/div[' + str(
+                                        main_cat_index + 1) + ']/div[2]/div[not(@hidden)]//li/a')
+
         for sub in subs:
             sub_link = sub.get_attribute("href")
-            subs_info_list.append((subcat_name, sub_link))
+            name = sub.text
+            subs_info_list.append((subcat_name, sub_link, name))
 
-    for subcat_name, sub_link in subs_info_list:
+    skipped_link = int(input('how many link skipped? '))
+    i = 0
+
+    for subcat_name, sub_link, name in subs_info_list:
+        i += 1
+        if skipped_link >= i:
+            continue
         driver.get(sub_link)
-        try:
-            h1 = driver.find_element(By.TAG_NAME, "h1")
-            full_text = h1.text
-            sub_name = clean_sub_name(full_text)
-        except NoSuchElementException:
-            sub_name = ""
 
-        logging.info(f"      ➜ Subsidiary: {sub_name} of {subcat_name}")
-        extract_data(cat_name, subcat_name, sub_name, sub_link)
+        logging.info(f"      ➜ Subsidiary: {name} of {subcat_name}")
+        extract_data(cat_name, subcat_name, name, sub_link)
 
     driver.get(start_url)
+    # exit()
 
 logging.info("✅ Scraping finished successfully!")
 driver.quit()
