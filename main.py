@@ -36,9 +36,9 @@ def save_to_database(data):
               """
         cursor.execute(sql, tuple(data))
         conn.commit()
-        logging.info(f"💾 Saved: {data[0]}")
+        # logging.info(f"💾 Saved: {data[0]}")
     except Exception as e:
-        logging.error(f"❌ DB error: {e}")
+        # logging.error(f"❌ DB error: {e}")
         conn.rollback()
 
 
@@ -107,7 +107,7 @@ def load_existing_phones(cursor):
         phones = row['phone_number']
         existing.add(phones)
 
-    logging.info(f"📱 Loaded {len(existing)} existing phone numbers from database.")
+    # logging.info(f"📱 Loaded {len(existing)} existing phone numbers from database.")
 
     return tuple(existing)
 
@@ -165,17 +165,17 @@ def go_next_page(sub_link):
         driver.execute_script("arguments[0].click();", next_btn)
         elements = driver.find_elements(By.XPATH, "//div[contains(@class, 'attention')]")
         if len(elements) > 1:
-            logging.info("ℹ️ Account limitation.")
+            # logging.info("ℹ️ Account limitation.")
             driver.get(sub_link)
             return False
         else:
-            logging.info("➡ Moved to next page.")
+            # logging.info("➡ Moved to next page.")
             return True
     except NoSuchElementException:
-        logging.info("ℹ️ No next page button.")
+        # logging.info("ℹ️ No next page button.")
         return False
     except Exception as e:
-        logging.warning(f"⚠️ Cannot go to next page: {e}")
+        # logging.warning(f"⚠️ Cannot go to next page: {e}")
         return False
 
 
@@ -201,13 +201,14 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 filter_btn.click()
                 time.sleep(2)
             except:
-                logging.warning("⚠ Filter button not found!")
+                pass
+                # logging.warning("⚠ Filter button not found!")
 
             try:
                 no_result = driver.find_element(By.XPATH,
                                                 '//p[contains(@class,"search-count") and contains(text(),"نتیجه‌ای یافت نشد")]')
                 if no_result:
-                    logging.info(f"ℹ️ No results for province: {province_name}, skipping...")
+                    # logging.info(f"ℹ️ No results for province: {province_name}, skipping...")
                     driver.get(sub_link)
                     time.sleep(2)
                     continue
@@ -217,7 +218,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
             duplicate_count = 0
             while True:
                 cards = driver.find_elements(By.XPATH, '//div[@class="content"]')
-                logging.info(f"📦 Cards found: {len(cards)}")
+                # logging.info(f"📦 Cards found: {len(cards)}")
 
                 for card in cards:
                     try:
@@ -235,9 +236,9 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
 
                     if phone_number in existing_phones and phone_number != 'NoPhoneFound':
                         duplicate_count += 1
-                        logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
+                        # logging.info(f"⚠️ Duplicate phone found ({duplicate_count}/5): {phone_number}")
                         if duplicate_count >= 5:
-                            logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
+                            # logging.warning("🚫 More than 5 duplicates on this page, skipping category...")
                             # return
                             break
                         continue
@@ -279,7 +280,7 @@ except:
     driver.quit()
     exit()
 
-logging.info(f"📂 Category count: {len(categories)}")
+# logging.info(f"📂 Category count: {len(categories)}")
 skipped_categories = int(input('how many categories skipped? '))
 
 for main_cat_index, cat in enumerate(categories):
@@ -287,18 +288,16 @@ for main_cat_index, cat in enumerate(categories):
         continue
 
     cat_name = get_text_safe(cat)
-    logging.info(f"======== CATEGORY: {cat_name} ========")
-    time.sleep(2)
+    logging.info(f"======== CATEGORY: {cat_name} ({main_cat_index+1}) ========")
     scroll_click(cat)
-    time.sleep(2)
+    time.sleep(1)
 
     subs_info_list = []
-    # subcats = driver.find_elements(By.XPATH, "//ul[@class='topic']/li/button")
     subcats = driver.find_elements(By.XPATH, '//*[@id="tab-wrapper"]/div[' + str(
         main_cat_index + 1) + ']//ul[@class="topic"]/li/button')
     for sub_cat_index, subcat in enumerate(subcats):
         subcat_name = get_text_safe(subcat)
-        logging.info(f"   ➜ SubCategory: {subcat_name}")
+        # logging.info(f"   ➜ SubCategory: {subcat_name}")
         if subcat_name == '' or subcat_name == 'NoTextFound':
             continue
 
@@ -310,21 +309,21 @@ for main_cat_index, cat in enumerate(categories):
                                         main_cat_index + 1) + ']/div[2]/div[not(@hidden)]//li/a')
 
         for sub in subs:
-            sub_link = sub.get_attribute("href")
+            link = sub.get_attribute("href")
             name = sub.text
-            subs_info_list.append((subcat_name, sub_link, name))
+            subs_info_list.append((subcat_name, sub_cat_index, link, name))
 
     skipped_link = int(input('how many link skipped? '))
     i = 0
 
-    for subcat_name, sub_link, name in subs_info_list:
+    for subcat_name, sub_cat_index, link, name in subs_info_list:
         i += 1
         if skipped_link >= i:
             continue
-        driver.get(sub_link)
+        driver.get(link)
 
-        logging.info(f"      ➜ Subsidiary: {name} of {subcat_name}")
-        extract_data(cat_name, subcat_name, name, sub_link)
+        logging.info(f"      ➜ Subsidiary: {name} ({i}) of {subcat_name} ({sub_cat_index})")
+        extract_data(cat_name, subcat_name, name, link)
 
     driver.get(start_url)
     # exit()
