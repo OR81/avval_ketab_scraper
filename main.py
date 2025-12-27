@@ -190,8 +190,8 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
 
             all_opts = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
             province = all_opts[i]
-            province_name = province.text.strip()
-            logging.info(f"➡ Selecting province: {province_name}")
+            # province_name = province.text.strip()
+            # logging.info(f"➡ Selecting province: {province_name}")
 
             scroll_click(province)
             time.sleep(0.5)
@@ -256,7 +256,9 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
 
                     name = get_element_text_safe(card, './/h2/a')
                     specialty = get_element_text_safe(card, './/div[contains(@class,"keywords")]')
-                    specialty += ' | ' + get_element_text_safe(card, './/p[contains(@class,"print-postal-hidden")]')
+                    postal = get_element_text_safe(card, './/p[contains(@class,"print-postal-hidden")]')
+                    if postal != 'NoTextFound':
+                        specialty += ' | ' + postal
 
                     row = [name, specialty, phone_number, address, email, category_name, subcat_name, sub_name, gis]
                     save_to_database(row)
