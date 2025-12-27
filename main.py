@@ -322,7 +322,7 @@ for main_cat_index, cat in enumerate(categories):
             continue
         driver.get(link)
 
-        logging.info(f"      ➜ Subsidiary: {name} ({i}) of {subcat_name} ({sub_cat_index})")
+        logging.info(f"      ➜ Subsidiary: {name} ({i}) of {subcat_name} ({sub_cat_index+1})")
         extract_data(cat_name, subcat_name, name, link)
 
     driver.get(start_url)
