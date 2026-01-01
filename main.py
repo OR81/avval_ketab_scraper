@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+from unittest import skip
 
 import pymysql
 from dotenv import load_dotenv
@@ -186,7 +187,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
             dropdown = wait.until(
                 EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'selectize-input')]")))
             dropdown.click()
-            time.sleep(1)
+            time.sleep(0.5)
 
             all_opts = driver.find_elements(By.XPATH, '//div[@class="selectize-dropdown-content"]/div')
             province = all_opts[i]
@@ -204,6 +205,8 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 pass
                 # logging.warning("⚠ Filter button not found!")
 
+            # break
+
             try:
                 no_result = driver.find_element(By.XPATH,
                                                 '//p[contains(@class,"search-count") and contains(text(),"نتیجه‌ای یافت نشد")]')
@@ -216,6 +219,7 @@ def extract_data(category_name, subcat_name, sub_name, sub_link):
                 pass
 
             duplicate_count = 0
+
             while True:
                 cards = driver.find_elements(By.XPATH, '//div[@class="content"]')
                 # logging.info(f"📦 Cards found: {len(cards)}")
@@ -283,14 +287,18 @@ except:
     exit()
 
 # logging.info(f"📂 Category count: {len(categories)}")
-skipped_categories = int(input('how many categories skipped? '))
+skip_set = False
+
+skipped_categories = 0 if skip_set else int(input('how many categories skipped? '))
 
 for main_cat_index, cat in enumerate(categories):
     if skipped_categories > main_cat_index:
         continue
 
+    categories = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//*[@id="directory"]/div[1]/ul/li')))
+    cat = categories[main_cat_index]
     cat_name = get_text_safe(cat)
-    logging.info(f"======== CATEGORY: {cat_name} ({main_cat_index+1}) ========")
+    # logging.info(f"======== CATEGORY: {cat_name} ({main_cat_index+1}) ========")
     scroll_click(cat)
     time.sleep(1)
 
@@ -315,7 +323,10 @@ for main_cat_index, cat in enumerate(categories):
             name = sub.text
             subs_info_list.append((subcat_name, sub_cat_index, link, name))
 
-    skipped_link = int(input('how many link skipped? '))
+    logging.info(f"======== CATEGORY: {cat_name} ({main_cat_index+1}) found {len(subs_info_list)} links ========")
+
+    skipped_link = 0 if skip_set else  int(input('how many link skipped? '))
+    skip_set = True
     i = 0
 
     for subcat_name, sub_cat_index, link, name in subs_info_list:
@@ -327,8 +338,8 @@ for main_cat_index, cat in enumerate(categories):
         logging.info(f"      ➜ Subsidiary: {name} ({i}) of {subcat_name} ({sub_cat_index+1})")
         extract_data(cat_name, subcat_name, name, link)
 
-    # driver.get(start_url)
-    exit()
+    driver.get(start_url)
+    # exit()
 
 logging.info("✅ Scraping finished successfully!")
 driver.quit()
